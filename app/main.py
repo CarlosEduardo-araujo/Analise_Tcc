@@ -66,15 +66,15 @@ highlight = folium.features.GeoJson(data = geojson_url,
 
 #Adicionando caixa de texto
 folium.features.GeoJsonTooltip(fields = ["name",],
-                              aliases = ["cidade"],
+                               aliases = ["cidade"],
                                labels = False,
-                              style = ("background-color: white; color: black; font-family: arial; font-size: 16px; padding: 10px;")).add_to(highlight)
+                               style = ("background-color: white; color: black; font-family: arial; font-size: 16px; padding: 10px;")).add_to(highlight)
 
 #Adicionando o destaque ao mapa
 mapa_ceara.add_child(highlight)
 
 
-col1, col2 = st.columns(2)
+col1, col2 = st.columns([2, 1])
 
 # Exibindo o mapa na primeira coluna
 with col1:
@@ -140,7 +140,52 @@ st.plotly_chart(fig)
 
 
 
-st.subheader("2 Qual é a relação entre o tipo de escola de origem (pública ou privada) e a situação de matrícula?")
+st.subheader("3 Qual o total de matriculas por sexo por ano ?")
+
+#df_gen = df_raw[df_raw["sexo"] == "M"]
+df_gen = pd.DataFrame(df_raw["sexo"].value_counts()).reset_index().sort_values("sexo")
+
+
+
+# Curva
+fig3 = go.Figure(go.Scatter(x = df_gen["sexo"],
+                          y = df_gen["count"],
+                          mode = "lines",
+                          line_shape = "spline",
+                          line = dict(color = "rgb(82,106,131)",
+                                     width = 4)))
+
+# Pontos
+fig3.add_trace(go.Scatter(x = datas["sexo"],
+                        y = datas["count"],
+                        mode = "markers+text",
+                        text = datas["count"],
+                        textposition = "top center",
+                        marker = dict(color = "black",
+                                     size = 6)))
+
+#Títulos
+fig3.update_layout(title = "Distribuição de Abandonos por Ano Letivo",
+                 xaxis_title = "Ano Letivo",
+                 yaxis_title = "Quantidade")
+
+#Plano de Fundo e Eixos
+fig3.update_layout(xaxis = dict(showline = False,
+                              showgrid = False,     
+                              showticklabels = True,
+                              linecolor = "grey",
+                              linewidth = 2,
+                              ticks = "outside"),
+                 yaxis = dict(linecolor = "grey",
+                              linewidth = 2,
+                              showgrid = False,
+                              showline = False,
+                              ticks = "outside"),
+                 plot_bgcolor = "white",
+                 showlegend = False)
+
+
+st.plotly_chart(fig3)
 
 st.subheader("3 Como a situação de matrículas dos alunos estão distribuídas em relação ao sexo")
 
