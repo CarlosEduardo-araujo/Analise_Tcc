@@ -3,9 +3,9 @@ import pandas as pd
 import folium 
 import branca.colormap
 from streamlit_folium import st_folium
-import inflection
 from functions import snake_case
 import plotly.graph_objects as go
+import plotly.express as px
 
 st.set_page_config(page_title="Alunos Eng. telecom IFCE", page_icon="", layout="wide")
 
@@ -18,7 +18,14 @@ snake_case(df_raw)
 df_raw["cidade"] = df_raw["texto_cidade"].apply(lambda x: x if pd.isna(x) else x[:-5])
 #df_raw["cidade"] = df_raw["texto_cidade"].apply(lambda x: x if pd.isna(x) else x.split(' ')[0])
 
-df_mapa = df_raw.value_counts("cidade")
+df_mapa = df_raw.value_counts("cidade").reset_index(name="frequencia")
+
+
+df_mapa["representatividade"] = (
+    (df_mapa["frequencia"] / df_mapa["frequencia"].sum()) * 100
+).round(2).astype(str) + "%"
+
+
 
 st.title("Análise dos egressos Engenharia de telecomunicações IFCE.")
 
@@ -38,7 +45,7 @@ folium.TileLayer(tiles = branca.utilities.image_to_url([[1,1], [1,1]]),
 #Criando o mapa coropletico
 folium.Choropleth(geo_data = geojson_url,
                  data = df_mapa,
-                 columns= ["cidade", "cod_matricula"],
+                 columns= ["cidade", "frequencia"],
                  key_on = "feature.properties.name",
                  fill_color = "OrRd",
                  fill_opacity = 0.9,
@@ -142,10 +149,23 @@ st.plotly_chart(fig)
 
 st.subheader("3 Qual o total de matriculas por sexo por ano ?")
 
-#df_gen = df_raw[df_raw["sexo"] == "M"]
-df_gen = pd.DataFrame(df_raw["sexo"].value_counts()).reset_index().sort_values("sexo")
 
+# Agrupando os dados
+df_agrupado = df_raw.groupby(["ano_letivo_ini", "sexo"]).size().reset_index(name="qtd_matriculas")
 
+# Gráfico com Plotly Express
+fig3 = px.bar(
+    df_agrupado,
+    x="ano_letivo_ini",
+    y="qtd_matriculas",
+    color="sexo",
+    barmode="group",
+    labels={"ano_letivo_ini": "Ano Letivo", "qtd_matriculas": "Quantidade de Matrículas", "sexo": "Gênero"},
+    title="Quantidade de Matrículas por Ano e Gênero"
+)
+
+# Exibindo no Streamlit
+st.plotly_chart(fig3)
 
 # Curva
 fig3 = go.Figure(go.Scatter(x = df_gen["sexo"],
@@ -156,35 +176,35 @@ fig3 = go.Figure(go.Scatter(x = df_gen["sexo"],
                                      width = 4)))
 
 # Pontos
-fig3.add_trace(go.Scatter(x = datas["sexo"],
-                        y = datas["count"],
-                        mode = "markers+text",
-                        text = datas["count"],
-                        textposition = "top center",
-                        marker = dict(color = "black",
-                                     size = 6)))
-
+#ig3.add_trace(go.Scatter(x = datas["sexo"],
+#                       y = datas["count"],
+#                       mode = "markers+text",
+#                       text = datas["count"],
+#                       textposition = "top center",
+#                       marker = dict(color = "black",
+#                                    size = 6)))
+#
 #Títulos
-fig3.update_layout(title = "Distribuição de Abandonos por Ano Letivo",
-                 xaxis_title = "Ano Letivo",
-                 yaxis_title = "Quantidade")
-
+#ig3.update_layout(title = "Distribuição de Abandonos por Ano Letivo",
+#                xaxis_title = "Ano Letivo",
+#                yaxis_title = "Quantidade")
+#
 #Plano de Fundo e Eixos
-fig3.update_layout(xaxis = dict(showline = False,
-                              showgrid = False,     
-                              showticklabels = True,
-                              linecolor = "grey",
-                              linewidth = 2,
-                              ticks = "outside"),
-                 yaxis = dict(linecolor = "grey",
-                              linewidth = 2,
-                              showgrid = False,
-                              showline = False,
-                              ticks = "outside"),
-                 plot_bgcolor = "white",
-                 showlegend = False)
-
-
+#ig3.update_layout(xaxis = dict(showline = False,
+#                             showgrid = False,     
+#                             showticklabels = True,
+#                             linecolor = "grey",
+#                             linewidth = 2,
+#                             ticks = "outside"),
+#                yaxis = dict(linecolor = "grey",
+#                             linewidth = 2,
+#                             showgrid = False,
+#                             showline = False,
+#                             ticks = "outside"),
+#                plot_bgcolor = "white",
+#                showlegend = False)
+#
+#
 st.plotly_chart(fig3)
 
 st.subheader("3 Como a situação de matrículas dos alunos estão distribuídas em relação ao sexo")
