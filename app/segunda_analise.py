@@ -13,7 +13,7 @@ def snake_case(s):
     return s.strip().lower().replace(" ", "_").replace("-", "_")
 
 # Carregar os dados do novo diretório e encoding
-df = pd.read_csv(r"Data\matriculasFinal-phase2.csv", sep=';', encoding='latin')
+df = pd.read_csv(r"Data/matriculasFinal-phase2.csv", sep=';', encoding='latin')
 
 # Converter todas as colunas para snake_case
 df.columns = [snake_case(col) for col in df.columns]
