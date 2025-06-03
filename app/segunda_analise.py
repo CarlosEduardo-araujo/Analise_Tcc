@@ -44,7 +44,7 @@ df_mapa["representatividade"] = (
 ).round(2).astype(str) + "%"
 
 # Carregar o geojson local com encoding UTF-8
-geojson_url = r"geojson\geojs-23-mun.json"
+geojson_url = r"geojson/geojs-23-mun.json"
 with open(geojson_url, encoding="utf-8") as f:
     geojson_data = json.load(f)
 
