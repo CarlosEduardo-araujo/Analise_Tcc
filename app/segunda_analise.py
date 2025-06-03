@@ -36,7 +36,6 @@ df["tempo_permanencia"] = (df["dt_ultimo_evento"] - df["dt_matricula"]).dt.days 
 
 df['tempo_permanencia_meses'] = (df['dt_ultimo_evento'] - df['dt_matricula']).dt.days / 30.44
 
-st.write(df.head())
 
 # Preparar dados para o mapa
 df_mapa = df.value_counts("cidade").reset_index(name="frequencia")
