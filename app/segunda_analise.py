@@ -22,7 +22,7 @@ df.columns = [snake_case(col) for col in df.columns]
 df["cidade"] = df["texto_cidade"].apply(lambda x: x[:-5] if isinstance(x, str) and len(x) > 5 else x)
 
 # Criando coluna para saber se o aluno continua cursando ou não
-df["status"] = df["desc_sit_matricula"].apply(lambda x: 'cursando' if x == 'Matriculado' else 'Formado' if x == 'Formado' else 'Não cursando')
+df["status"] = df["desc_sit_matricula"].apply(lambda x: 'cursando' if x in ['Matriculado', 'Concludente', 'Estagiario (Concludente)'] else 'Formado' if x == 'Formado' else 'Não cursando')
 
 # Criando coluna para saber a data do ultimo evento de matrícula
 df["dt_ultimo_evento"] = df["ultimo_evento_matricula"].apply(lambda x: x.split(":")[1] if isinstance(x, str) else x)
@@ -37,16 +37,6 @@ df["tempo_permanencia"] = (df["dt_ultimo_evento"] - df["dt_matricula"]).dt.days 
 df['tempo_permanencia_meses'] = (df['dt_ultimo_evento'] - df['dt_matricula']).dt.days / 30.44
 
 
-# Preparar dados para o mapa
-df_mapa = df.value_counts("cidade").reset_index(name="frequencia")
-df_mapa["representatividade"] = (
-    (df_mapa["frequencia"] / df_mapa["frequencia"].sum()) * 100
-).round(2).astype(str) + "%"
-
-# Carregar o geojson local com encoding UTF-8
-geojson_url = r"geojson/geojs-23-mun.json"
-with open(geojson_url, encoding="utf-8") as f:
-    geojson_data = json.load(f)
 
 st.title("Análise de Matrículas - Ensino Superior")
 
@@ -59,6 +49,37 @@ perguntas = [
 ]
 escolha = st.sidebar.radio("Escolha uma pergunta:", perguntas)
 
+# =========================
+# Filtros interativos
+# =========================
+st.sidebar.header("Filtros")
+sexos = df['sexo'].dropna().unique()
+sexo_selecionado = st.sidebar.multiselect("Sexo", options=sexos, default=[])
+
+situacoes = df['status'].dropna().unique()
+situacao_selecionada = st.sidebar.multiselect("Situação de Matrícula", options=situacoes, default=[])
+
+anos = df['ano_letivo_ini'].dropna().unique()
+anos_ordenados = sorted(anos)
+anos_selecionado = st.sidebar.multiselect("Ano Letivo Inicial", options=anos_ordenados, default=[])
+
+semestres = df['periodo_letivo_ini'].dropna().unique()
+semestre_selecionado = st.sidebar.multiselect("Semestre Letivo Inicial", options=semestres, default=[])
+
+# Filtro condicional: só filtra se o usuário selecionar algo
+df_filtrado = df.copy()
+if sexo_selecionado:
+    df_filtrado = df_filtrado[df_filtrado['sexo'].isin(sexo_selecionado)]
+if situacao_selecionada:
+    df_filtrado = df_filtrado[df_filtrado['status'].isin(situacao_selecionada)]
+if anos_selecionado:
+    df_filtrado = df_filtrado[df_filtrado['ano_letivo_ini'].isin(anos_selecionado)]
+if semestre_selecionado:
+    df_filtrado = df_filtrado[df_filtrado['periodo_letivo_ini'].isin(semestre_selecionado)]
+
+# =========================
+# Funções auxiliares
+# =========================
 def bar_with_percent(counts, x_label, y_label, title):
     percent = (counts / counts.sum() * 100).round(2)
     labels = [f"{v} ({p}%)" for v, p in zip(counts.values, percent.values)]
@@ -70,7 +91,6 @@ def bar_with_percent(counts, x_label, y_label, title):
     return fig
 
 def grouped_bar_with_percent(df_grouped, x, y, color, x_label, y_label, title):
-    # Calcula percentuais por grupo (x)
     total_por_x = df_grouped.groupby(x)[y].transform('sum')
     df_grouped['percent'] = (df_grouped[y] / total_por_x * 100).round(2)
     df_grouped['label'] = df_grouped.apply(lambda row: f"{row[y]} ({row['percent']}%)", axis=1)
@@ -81,6 +101,21 @@ def grouped_bar_with_percent(df_grouped, x, y, color, x_label, y_label, title):
     fig.update_traces(textposition='outside')
     return fig
 
+# Preparar dados para o mapa
+df_mapa = df_filtrado.value_counts("cidade").reset_index(name="frequencia")
+df_mapa["representatividade"] = (
+    (df_mapa["frequencia"] / df_mapa["frequencia"].sum()) * 100
+).round(2).astype(str) + "%"
+
+# Carregar o geojson local com encoding UTF-8
+geojson_url = r"geojson/geojs-23-mun.json"
+with open(geojson_url, encoding="utf-8") as f:
+    geojson_data = json.load(f)
+
+
+# =========================
+# Visualizações
+# =========================
 if escolha == perguntas[0]:
     st.header("1. Perfil dos alunos")
     # Mapa inicial
@@ -136,11 +171,11 @@ if escolha == perguntas[0]:
         st.dataframe(df_mapa, height=500)
 
     st.subheader("Idade média dos alunos")
-    df['dt_nascimento'] = pd.to_datetime(df['dt_nascimento'], errors='coerce')
-    df['idade'] = (pd.Timestamp('today') - df['dt_nascimento']).dt.days // 365
-    st.write(f"Idade média: {df['idade'].mean():.1f} anos")
+    df_filtrado['dt_nascimento'] = pd.to_datetime(df_filtrado['dt_nascimento'], errors='coerce')
+    df_filtrado['idade'] = (pd.Timestamp('today') - df_filtrado['dt_nascimento']).dt.days // 365
+    st.write(f"Idade média: {df_filtrado['idade'].mean():.1f} anos")
     # Histograma de idade com representatividade
-    idade_counts = df['idade'].value_counts().sort_index()
+    idade_counts = df_filtrado['idade'].value_counts().sort_index()
     idade_percent = (idade_counts / idade_counts.sum() * 100).round(2)
     idade_labels = [f"{v} ({p}%)" for v, p in zip(idade_counts.values, idade_percent.values)]
     fig = px.bar(
@@ -151,58 +186,55 @@ if escolha == perguntas[0]:
     st.plotly_chart(fig)
 
     st.subheader("Distribuição por sexo")
-    sexo_counts = df['sexo'].value_counts()
+    sexo_counts = df_filtrado['sexo'].value_counts()
     st.plotly_chart(bar_with_percent(sexo_counts, 'Sexo', 'Quantidade', "Sexo"))
 
     st.subheader("Distribuição por cor/raça")
-    cor_counts = df['desc_cor'].value_counts()
+    cor_counts = df_filtrado['desc_cor'].value_counts()
     st.plotly_chart(bar_with_percent(cor_counts, 'Cor/Raça', 'Quantidade', "Cor/Raça"))
 
     st.subheader("Tipo de escola de origem")
-    escola_counts = df['desc_tipo_escola_origem'].value_counts()
+    escola_counts = df_filtrado['desc_tipo_escola_origem'].value_counts()
     st.plotly_chart(bar_with_percent(escola_counts, 'Tipo de Escola', 'Quantidade', "Tipo de Escola de Origem"))
-
-
 
 elif escolha == perguntas[1]:
     st.header("2. Situação acadêmica atual dos alunos")
 
     st.subheader("Situação da matrícula")
-    sit_counts = df['desc_sit_matricula'].value_counts()
+    sit_counts = df_filtrado['desc_sit_matricula'].value_counts()
     st.plotly_chart(bar_with_percent(sit_counts, 'Situação', 'Quantidade', "Situação da Matrícula"))
 
     st.subheader("Abandono por letivo inicial")
-    ult_per_counts = df[df['desc_sit_matricula'] == "Abandono"]['ano_letivo_ini'].value_counts()
+    ult_per_counts = df_filtrado[df_filtrado['desc_sit_matricula'] == "Abandono"]['ano_letivo_ini'].value_counts()
     st.plotly_chart(bar_with_percent(ult_per_counts, 'Ano letivo', 'Quantidade', "Abandono por Período Letivo Inicial"))
 
     st.subheader("Cursando por ano letivo inicial")
-    per_counts = df[df['desc_sit_matricula'] == "Matriculado"]['ano_letivo_ini'].value_counts()
+    per_counts = df_filtrado[df_filtrado['desc_sit_matricula'] == "Matriculado"]['ano_letivo_ini'].value_counts()
     st.plotly_chart(bar_with_percent(per_counts, 'Situação no Período', 'Quantidade', "Cursando por ano letivo inicial"))
-
 
 elif escolha == perguntas[2]:
     st.header("3. Tempo médio de permanência no curso por perfil")
 
     st.subheader("Tempo médio de permanência (em anos)")
-    st.write(f"Tempo médio: {df['tempo_permanencia'].mean():.1f} anos")
+    st.write(f"Tempo médio: {df_filtrado['tempo_permanencia'].mean():.1f} anos")
 
     st.subheader("Tempo de permanência por sexo")
     fig = px.box(
-        df, x='sexo', y='tempo_permanencia', color='sexo',
+        df_filtrado, x='sexo', y='tempo_permanencia', color='sexo',
         points="all", title="Tempo de Permanência por Sexo"
     )
     st.plotly_chart(fig)
 
     st.subheader("Tempo de permanência por tipo de escola de origem")
     fig = px.box(
-        df, x='desc_tipo_escola_origem', y='tempo_permanencia', color='desc_tipo_escola_origem',
+        df_filtrado, x='desc_tipo_escola_origem', y='tempo_permanencia', color='desc_tipo_escola_origem',
         points="all", title="Tempo de Permanência por Tipo de Escola de Origem"
     )
     st.plotly_chart(fig)
 
     st.subheader("Tempo de permanência por situação da matrícula")
     fig = px.box(
-        df, x='status', y='tempo_permanencia', color='status',
+        df_filtrado, x='status', y='tempo_permanencia', color='status',
         points="all", title="Tempo de Permanência por Situação da Matrícula"
     )
     st.plotly_chart(fig)
@@ -212,13 +244,10 @@ elif escolha == perguntas[3]:
 
     st.subheader("Coeficiente de rendimento por tipo de escola de origem")
     fig = px.box(
-        df, x='desc_tipo_escola_origem', y='coeficiente_rendimento', color='desc_tipo_escola_origem',
+        df_filtrado, x='desc_tipo_escola_origem', y='coeficiente_rendimento', color='desc_tipo_escola_origem',
         points="all", title="Coeficiente de Rendimento por Tipo de Escola de Origem"
     )
     st.plotly_chart(fig)
-
-   # st.write(df.groupby('desc_tipo_escola_origem')['coeficiente_rendimento'].describe())
-
 
 elif escolha == perguntas[4]:
     st.header("5. Relação entre situação de matricula e rendimento acadêmico")
@@ -227,9 +256,7 @@ elif escolha == perguntas[4]:
 
     st.subheader("Coeficiente de rendimento por situação de matricula.")
     fig = px.box(
-        df, x='desc_sit_matricula', y='coeficiente_rendimento', color='desc_sit_matricula',
+        df_filtrado, x='desc_sit_matricula', y='coeficiente_rendimento', color='desc_sit_matricula',
         points="all", title="Coeficiente de Rendimento por Tipo de Escola de Origem"
     )
     st.plotly_chart(fig)
-
-   # st.write(df.groupby('desc_sit_matricula')['coeficiente_rendimento'].describe())
