@@ -64,7 +64,7 @@ df_dicionario = pd.DataFrame(dicionario_dados)
 pagina = st.sidebar.radio("Navegação", ["Capa", "Análise"])
 
 if pagina == "Capa":
-    st.image(r"Data\LogoIFCE.png", width=200)
+    st.image(r"Data/LogoIFCE.png", width=200)
     st.title("Painel de Análise de Matrículas - Engenharia de Telecomunicações IFCE")
     st.markdown("""
     Este aplicativo foi criado com a inteção de fazer uma análise referente aos dados de matrículas do curso de Engenharia de Telecomunicações do IFCE.
