@@ -15,15 +15,17 @@ def snake_case(s):
 # Carregar os dados do novo diretório e encoding
 df = pd.read_csv(r"Data/matriculasFinal-phase2.csv", sep=';', encoding='latin')
 df.columns = [snake_case(col) for col in df.columns]
+df = df[df["ano_letivo_ini"] >= 2014]  # Filtrar anos a partir de 2014
 
 # Corrigir a coluna cidade extraindo o nome da cidade
 df["cidade"] = df["texto_cidade"].apply(lambda x: x[:-5] if isinstance(x, str) and len(x) > 5 else x)
 
+
 # Criando coluna para saber se o aluno continua cursando ou não
 df["status"] = df["desc_sit_matricula"].apply(
-    lambda x: 'cursando' if x in ['Matriculado', 'Concludente', 'Estagiario (Concludente)']
-    else 'Formado' if x == 'Formado'
-    else 'Não cursando'
+    lambda x: 'Matriculado' if x in ['Matriculado', 'Concludente', 'Estagiario (Concludente)']
+    else 'Egresso' if x == 'Formado'
+    else 'Sem êxito'
 )
 
 # Criando coluna para saber a data do ultimo evento de matrícula
@@ -210,7 +212,7 @@ elif pagina == "Análise":
             st.subheader("Mapa Interativo")
             st_folium(mapa_ceara, width=700, height=500)
         with col2:
-            st.subheader("Quantidade de egressos")
+            st.subheader("Quantidade de matrículas")
             st.dataframe(df_mapa, height=500)
 
         st.subheader("Idade média dos alunos")
@@ -227,8 +229,52 @@ elif pagina == "Análise":
         st.plotly_chart(fig)
 
         st.subheader("Distribuição por sexo")
-        sexo_counts = df_filtrado['sexo'].value_counts()
-        st.plotly_chart(bar_with_percent(sexo_counts, 'Sexo', 'Quantidade', "Sexo"))
+        sexo_counts = df_filtrado['sexo'].value_counts().reset_index()
+        sexo_counts.columns = ['sexo', 'quantidade']
+        fig = px.pie(
+            sexo_counts,
+            names='sexo',
+            values='quantidade',
+            title="Distribuição por Sexo",
+            hole=0.5,
+            color='sexo',
+            color_discrete_map={'F': 'red', 'M': 'blue'}
+        )
+        fig.update_traces(textinfo='percent+label')
+        st.plotly_chart(fig)
+
+        st.subheader("Evolução da proporção de sexo por ano letivo")
+
+        # Agrupa e conta o número de alunos por ano e sexo
+        sexo_ano = df_filtrado.groupby(['ano_letivo_ini', 'sexo']).size().reset_index(name='quantidade')
+
+        # Calcula o total de alunos por ano
+        total_ano = sexo_ano.groupby('ano_letivo_ini')['quantidade'].transform('sum')
+
+        # Calcula a proporção de cada sexo em cada ano
+        sexo_ano['proporcao'] = (sexo_ano['quantidade'] / total_ano * 100).round(2)
+
+        # Cria o rótulo personalizado: "xx.x% (N)"
+        sexo_ano['rotulo'] = sexo_ano['proporcao'].astype(str) + '% (' + sexo_ano['quantidade'].astype(str) + ')'
+
+        # Gráfico de linha com rótulos e sem linhas de grade
+        fig = px.line(
+            sexo_ano,
+            x='ano_letivo_ini',
+            y='proporcao',
+            color='sexo',
+            markers=True,
+            text='rotulo',
+            labels={'ano_letivo_ini': 'Ano Letivo Inicial', 'proporcao': 'Proporção (%)', 'sexo': 'Sexo'},
+            title="Proporção de Sexo por Ano Letivo",
+            color_discrete_map={'F': '#E31B1F', 'M': '#0068c9'}
+        )
+        fig.update_traces(textposition='top center')
+        fig.update_xaxes(showgrid=False)
+        fig.update_yaxes(showgrid=False)
+        fig.update_layout(yaxis_tickformat='.1f')
+        st.plotly_chart(fig)
+
 
         st.subheader("Distribuição por cor/raça")
         cor_counts = df_filtrado['desc_cor'].value_counts()
@@ -242,7 +288,7 @@ elif pagina == "Análise":
         st.header("2. Situação acadêmica atual dos alunos")
 
         st.subheader("Situação da matrícula")
-        sit_counts = df_filtrado['desc_sit_matricula'].value_counts()
+        sit_counts = df_filtrado['status'].value_counts()
         st.plotly_chart(bar_with_percent(sit_counts, 'Situação', 'Quantidade', "Situação da Matrícula"))
 
         st.subheader("Abandono por letivo inicial")
@@ -252,6 +298,34 @@ elif pagina == "Análise":
         st.subheader("Cursando por ano letivo inicial")
         per_counts = df_filtrado[df_filtrado['desc_sit_matricula'] == "Matriculado"]['ano_letivo_ini'].value_counts()
         st.plotly_chart(bar_with_percent(per_counts, 'Situação no Período', 'Quantidade', "Cursando por ano letivo inicial"))
+
+        st.subheader("Status dos alunos por Ano Letivo Inicial")
+
+        # Agrupa e conta
+        status_ano = df_filtrado.groupby(['ano_letivo_ini', 'status']).size().reset_index(name='quantidade')
+
+        # Calcula o total por ano
+        total_por_ano = status_ano.groupby('ano_letivo_ini')['quantidade'].transform('sum')
+        status_ano['percentual'] = (status_ano['quantidade'] / total_por_ano * 100).round(1)
+        status_ano['label'] = status_ano['percentual'].astype(str) + '%'
+
+        fig = px.bar(
+            status_ano,
+            x='ano_letivo_ini',
+            y='quantidade',
+            color='status',
+            title="Distribuição do Status dos Alunos por Ano Letivo Inicial",
+            labels={'ano_letivo_ini': 'Ano Letivo Inicial', 'quantidade': 'Quantidade', 'status': 'Status'},
+            barmode='stack',
+            color_discrete_map={
+                'Sem êxito': "#E31B1F",
+                'Matriculado': "#0068c9",
+                'Egresso': 'green'
+            },
+            text='label'
+        )
+        fig.update_traces(textposition='outside', textangle=0)
+        st.plotly_chart(fig)
 
     elif escolha == perguntas[2]:
         st.header("3. Tempo médio de permanência no curso por perfil")
@@ -293,11 +367,10 @@ elif pagina == "Análise":
     elif escolha == perguntas[4]:
         st.header("5. Relação entre situação de matricula e rendimento acadêmico")
 
-        st.write("teste")
 
         st.subheader("Coeficiente de rendimento por situação de matricula.")
         fig = px.box(
-            df_filtrado, x='desc_sit_matricula', y='coeficiente_rendimento', color='desc_sit_matricula',
-            points="all", title="Coeficiente de Rendimento por Tipo de Escola de Origem"
+            df_filtrado, x='status', y='coeficiente_rendimento', color='status',
+            points="all", title="Coeficiente de Rendimento por Situação de Matrícula"
         )
         st.plotly_chart(fig)
