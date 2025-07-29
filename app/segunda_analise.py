@@ -28,6 +28,13 @@ df["status"] = df["desc_sit_matricula"].apply(
     else 'Sem êxito'
 )
 
+# Criando coluna para agrupar cor/raça
+df["grupo"] = df["desc_cor"].apply(
+    lambda x: 'PPI' if x in ['Preta', 'Parda', 'Indígena']
+    else 'Branca e amarela' if x in['Branca', 'Amarela'] 
+    else 'Sem informação'
+)
+
 # Criando coluna para saber a data do ultimo evento de matrícula
 df["dt_ultimo_evento"] = df["ultimo_evento_matricula"].apply(lambda x: x.split(":")[1] if isinstance(x, str) else x)
 df["ultimo_evento_matricula"] = df["ultimo_evento_matricula"].apply(lambda x: x.split(":")[0] if isinstance(x, str) else x)
@@ -102,6 +109,9 @@ elif pagina == "Análise":
     sexos = df['sexo'].dropna().unique()
     sexo_selecionado = st.sidebar.multiselect("Sexo", options=sexos, default=[])
 
+    grupos = df['grupo'].dropna().unique()
+    grupo_selecionado = st.sidebar.multiselect("Cor/raça", options=grupos, default=[])
+
     situacoes = df['status'].dropna().unique()
     situacao_selecionada = st.sidebar.multiselect("Situação de Matrícula", options=situacoes, default=[])
 
@@ -116,6 +126,8 @@ elif pagina == "Análise":
     df_filtrado = df.copy()
     if sexo_selecionado:
         df_filtrado = df_filtrado[df_filtrado['sexo'].isin(sexo_selecionado)]
+    if grupo_selecionado:
+        df_filtrado = df_filtrado[df_filtrado['grupo'].isin(grupo_selecionado)]
     if situacao_selecionada:
         df_filtrado = df_filtrado[df_filtrado['status'].isin(situacao_selecionada)]
     if anos_selecionado:
@@ -228,6 +240,7 @@ elif pagina == "Análise":
         fig.update_traces(textposition='outside')
         st.plotly_chart(fig)
 
+
         st.subheader("Distribuição por sexo")
         sexo_counts = df_filtrado['sexo'].value_counts().reset_index()
         sexo_counts.columns = ['sexo', 'quantidade']
@@ -240,7 +253,7 @@ elif pagina == "Análise":
             color='sexo',
             color_discrete_map={'F': 'red', 'M': 'blue'}
         )
-        fig.update_traces(textinfo='percent+label')
+        fig.update_traces(textinfo='percent+label+value')
         st.plotly_chart(fig)
 
         st.subheader("Evolução da proporção de sexo por ano letivo")
@@ -276,6 +289,53 @@ elif pagina == "Análise":
         st.plotly_chart(fig)
 
 
+        st.subheader("Distribuição por raça/cor")
+        raca_counts = df_filtrado['grupo'].value_counts().reset_index()
+        raca_counts.columns = ['grupo', 'quantidade']
+        fig = px.pie(
+            raca_counts,
+            names='grupo',
+            values='quantidade',
+            title="Distribuição por Raça/Cor",
+            hole=0.5,
+            color='grupo',
+            color_discrete_map={'PPI': 'red', 'Branca e amarela': 'blue', 'Sem informação': 'gray'}
+        )
+        fig.update_traces(textinfo='percent+label+value')
+        st.plotly_chart(fig)
+
+        st.subheader("Evolução da proporção de sexo por ano letivo")
+
+        # Agrupa e conta o número de alunos por ano e sexo
+        grupo_ano = df_filtrado.groupby(['ano_letivo_ini', 'grupo']).size().reset_index(name='quantidade')
+
+        # Calcula o total de alunos por ano
+        total_ano = grupo_ano.groupby('ano_letivo_ini')['quantidade'].transform('sum')
+
+        # Calcula a proporção de cada sexo em cada ano
+        grupo_ano['proporcao'] = (grupo_ano['quantidade'] / total_ano * 100).round(2)
+
+        # Cria o rótulo personalizado: "xx.x% (N)"
+        grupo_ano['rotulo'] = grupo_ano['proporcao'].astype(str) + '% (' + grupo_ano['quantidade'].astype(str) + ')'
+
+        # Gráfico de linha com rótulos e sem linhas de grade
+        fig = px.line(
+            grupo_ano,
+            x='ano_letivo_ini',
+            y='proporcao',
+            color='grupo',
+            markers=True,
+            text='rotulo',
+            labels={'ano_letivo_ini': 'Ano Letivo Inicial', 'proporcao': 'Proporção (%)', 'grupo': 'Cor/Raça'},
+            title="Proporção de cor/raça por Ano Letivo",
+            color_discrete_map={'PPI': '#E31B1F', 'Branca e amarela': '#0068c9', 'Sem informação': 'gray'}
+        )
+        fig.update_traces(textposition='top center')
+        fig.update_xaxes(showgrid=False)
+        fig.update_yaxes(showgrid=False)
+        fig.update_layout(yaxis_tickformat='.1f')
+        st.plotly_chart(fig)
+
         st.subheader("Distribuição por cor/raça")
         cor_counts = df_filtrado['desc_cor'].value_counts()
         st.plotly_chart(bar_with_percent(cor_counts, 'Cor/Raça', 'Quantidade', "Cor/Raça"))
@@ -287,9 +347,6 @@ elif pagina == "Análise":
     elif escolha == perguntas[1]:
         st.header("2. Situação acadêmica atual dos alunos")
 
-        st.subheader("Situação da matrícula")
-        sit_counts = df_filtrado['status'].value_counts()
-        st.plotly_chart(bar_with_percent(sit_counts, 'Situação', 'Quantidade', "Situação da Matrícula"))
 
         st.subheader("Abandono por letivo inicial")
         ult_per_counts = df_filtrado[df_filtrado['desc_sit_matricula'] == "Abandono"]['ano_letivo_ini'].value_counts()
@@ -298,6 +355,25 @@ elif pagina == "Análise":
         st.subheader("Cursando por ano letivo inicial")
         per_counts = df_filtrado[df_filtrado['desc_sit_matricula'] == "Matriculado"]['ano_letivo_ini'].value_counts()
         st.plotly_chart(bar_with_percent(per_counts, 'Situação no Período', 'Quantidade', "Cursando por ano letivo inicial"))
+
+        st.subheader("Distribuição matriculas por situação")
+        raca_counts = df_filtrado['status'].value_counts().reset_index()
+        raca_counts.columns = ['status', 'quantidade']
+        fig = px.pie(
+            raca_counts,
+            names='status',
+            values='quantidade',
+            title="Distribuição por Situação Acadêmica",
+            hole=0.5,
+            color='status',
+            color_discrete_map={
+                'Sem êxito': "#E31B1F",
+                'Matriculado': "#0068c9",
+                'Egresso': 'green'
+            },
+        )
+        fig.update_traces(textinfo='percent+label+value')
+        st.plotly_chart(fig)
 
         st.subheader("Status dos alunos por Ano Letivo Inicial")
 
