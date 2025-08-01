@@ -23,7 +23,7 @@ df["cidade"] = df["texto_cidade"].apply(lambda x: x[:-5] if isinstance(x, str) a
 
 # Criando coluna para saber se o aluno continua cursando ou não
 df["status"] = df["desc_sit_matricula"].apply(
-    lambda x: 'Matriculado' if x in ['Matriculado', 'Concludente', 'Estagiario (Concludente)']
+    lambda x: 'Matriculado' if x in ['Matriculado', 'Concludente', 'Estagiario (Concludente)', 'Trancado']
     else 'Egresso' if x == 'Formado'
     else 'Sem êxito'
 )
