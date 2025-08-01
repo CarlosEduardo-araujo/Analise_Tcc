@@ -29,6 +29,13 @@ df["status"] = df["desc_sit_matricula"].apply(
 )
 
 # Criando coluna para agrupar cor/raça
+df["desc_cor"] = df["desc_cor"].apply(
+    lambda x: 'SI' if x in ['Não dispõe da informação', 'Não quis declarar cor/raça']
+    else x
+)
+
+
+# Criando coluna para agrupar cor/raça
 df["grupo"] = df["desc_cor"].apply(
     lambda x: 'PPI' if x in ['Preta', 'Parda', 'Indígena']
     else 'Branca e amarela' if x in['Branca', 'Amarela'] 
@@ -100,7 +107,7 @@ elif pagina == "Análise":
         "4). Relação entre tipo de escola de origem e rendimento acadêmico",
         "5). Relação entre situação de matricula e rendimento acadêmico"
     ]
-    escolha = st.sidebar.radio("Escolha uma pergunta:", perguntas)
+    escolha = st.sidebar.radio("Escolha uma Análise:", perguntas)
 
     # =========================
     # Filtros interativos
@@ -109,8 +116,8 @@ elif pagina == "Análise":
     sexos = df['sexo'].dropna().unique()
     sexo_selecionado = st.sidebar.multiselect("Sexo", options=sexos, default=[])
 
-    grupos = df['grupo'].dropna().unique()
-    grupo_selecionado = st.sidebar.multiselect("Cor/raça", options=grupos, default=[])
+    cores = df['desc_cor'].dropna().unique()
+    cor_selecionado = st.sidebar.multiselect("Cor/raça", options=cores, default=[])
 
     situacoes = df['status'].dropna().unique()
     situacao_selecionada = st.sidebar.multiselect("Situação de Matrícula", options=situacoes, default=[])
@@ -126,8 +133,8 @@ elif pagina == "Análise":
     df_filtrado = df.copy()
     if sexo_selecionado:
         df_filtrado = df_filtrado[df_filtrado['sexo'].isin(sexo_selecionado)]
-    if grupo_selecionado:
-        df_filtrado = df_filtrado[df_filtrado['grupo'].isin(grupo_selecionado)]
+    if cor_selecionado:
+        df_filtrado = df_filtrado[df_filtrado['desc_cor'].isin(cor_selecionado)]
     if situacao_selecionada:
         df_filtrado = df_filtrado[df_filtrado['status'].isin(situacao_selecionada)]
     if anos_selecionado:
@@ -143,7 +150,8 @@ elif pagina == "Análise":
         labels = [f"{v} ({p}%)" for v, p in zip(counts.values, percent.values)]
         fig = px.bar(
             x=counts.index, y=counts.values, text=labels,
-            labels={'x': x_label, 'y': y_label}, title=title
+            labels={'x': x_label, 'y': y_label}, title=title,
+            color_discrete_sequence=['blue']
         )
         fig.update_traces(textposition='outside')
         return fig
@@ -154,7 +162,8 @@ elif pagina == "Análise":
         df_grouped['label'] = df_grouped.apply(lambda row: f"{row[y]} ({row['percent']}%)", axis=1)
         fig = px.bar(
             df_grouped, x=x, y=y, color=color, barmode='group',
-            text='label', labels={x: x_label, y: y_label}, title=title
+            text='label', labels={x: x_label, y: y_label}, title=title,
+            color_discrete_sequence=['blue']
         )
         fig.update_traces(textposition='outside')
         return fig
@@ -304,31 +313,33 @@ elif pagina == "Análise":
         fig.update_traces(textinfo='percent+label+value')
         st.plotly_chart(fig)
 
-        st.subheader("Evolução da proporção de sexo por ano letivo")
+        st.subheader("Evolução da proporção de raça/cor por ano letivo")
 
         # Agrupa e conta o número de alunos por ano e sexo
-        grupo_ano = df_filtrado.groupby(['ano_letivo_ini', 'grupo']).size().reset_index(name='quantidade')
+        cor_ano = df_filtrado.groupby(['ano_letivo_ini', 'desc_cor']).size().reset_index(name='quantidade')
 
         # Calcula o total de alunos por ano
-        total_ano = grupo_ano.groupby('ano_letivo_ini')['quantidade'].transform('sum')
+        total_ano = cor_ano.groupby('ano_letivo_ini')['quantidade'].transform('sum')
 
         # Calcula a proporção de cada sexo em cada ano
-        grupo_ano['proporcao'] = (grupo_ano['quantidade'] / total_ano * 100).round(2)
+        cor_ano['proporcao'] = (cor_ano['quantidade'] / total_ano * 100).round(2)
 
         # Cria o rótulo personalizado: "xx.x% (N)"
-        grupo_ano['rotulo'] = grupo_ano['proporcao'].astype(str) + '% (' + grupo_ano['quantidade'].astype(str) + ')'
+        cor_ano['rotulo'] = cor_ano['proporcao'].astype(str) + '% (' + cor_ano['quantidade'].astype(str) + ')'
+        #cor_ano['rotulo'] = cor_ano['proporcao'].astype(str) + '%' #+ cor_ano['quantidade'].astype(str) + ')'
 
         # Gráfico de linha com rótulos e sem linhas de grade
         fig = px.line(
-            grupo_ano,
+            cor_ano,
             x='ano_letivo_ini',
             y='proporcao',
-            color='grupo',
+            color='desc_cor',
+            color_discrete_map={'Parda': 'red', 'Branca': 'blue', 'Preta': 'black', 'Amarela': 'yellow', 'Indígena': 'green', 'SI': 'gray'},
             markers=True,
             text='rotulo',
             labels={'ano_letivo_ini': 'Ano Letivo Inicial', 'proporcao': 'Proporção (%)', 'grupo': 'Cor/Raça'},
-            title="Proporção de cor/raça por Ano Letivo",
-            color_discrete_map={'PPI': '#E31B1F', 'Branca e amarela': '#0068c9', 'Sem informação': 'gray'}
+            #title="Proporção de cor/raça por Ano Letivo"
+            #color_discrete_map={'PPI': '#E31B1F', 'Branca e amarela': '#0068c9', 'Sem informação': 'gray'}
         )
         fig.update_traces(textposition='top center')
         fig.update_xaxes(showgrid=False)
@@ -380,6 +391,10 @@ elif pagina == "Análise":
         # Agrupa e conta
         status_ano = df_filtrado.groupby(['ano_letivo_ini', 'status']).size().reset_index(name='quantidade')
 
+        # Define a ordem desejada para o status
+        ordem_status = ['Egresso', 'Matriculado', 'Sem êxito']
+        status_ano['status'] = pd.Categorical(status_ano['status'], categories=ordem_status, ordered=True)
+
         # Calcula o total por ano
         total_por_ano = status_ano.groupby('ano_letivo_ini')['quantidade'].transform('sum')
         status_ano['percentual'] = (status_ano['quantidade'] / total_por_ano * 100).round(1)
@@ -390,6 +405,7 @@ elif pagina == "Análise":
             x='ano_letivo_ini',
             y='quantidade',
             color='status',
+            category_orders={'status': ordem_status},
             title="Distribuição do Status dos Alunos por Ano Letivo Inicial",
             labels={'ano_letivo_ini': 'Ano Letivo Inicial', 'quantidade': 'Quantidade', 'status': 'Status'},
             barmode='stack',
